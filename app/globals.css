@@ -17,4 +17,20 @@
 body {
     color: var(--foreground);
     background: var(--background);
+    font-family: var(--font-body), 'Georgia', serif;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading), sans-serif;
+    letter-spacing: 0.02em;
+}
+
+/* Apply Chakra Petch to UI chrome elements (sidebar labels, model names, buttons) */
+.font-heading {
+    font-family: var(--font-heading), sans-serif;
+}
+
+/* Chat area gets the Lora editorial feel */
+textarea, input {
+    font-family: var(--font-body), 'Georgia', serif;
 }

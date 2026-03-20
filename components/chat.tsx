@@ -7,7 +7,7 @@ import { DefaultChatTransport } from "ai";
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Messages } from "./messages";
-import { modelID, models } from "@/lib/models";
+import { modelID, models, modelCapabilities } from "@/lib/models";
 import { Footnote } from "./footnote";
 import {
   ArrowUpIcon,
@@ -94,6 +94,7 @@ export function Chat({ id: initialId }: { id?: string }) {
   }, [id, initialId, setMessages]);
 
   const isGeneratingResponse = ["streaming", "submitted"].includes(status);
+  const currentModelSupportsImages = modelCapabilities[selectedModelId]?.supportsImages ?? true;
 
   const doSubmit = useCallback(() => {
     if (input.trim() === "" && images.length === 0) return;
@@ -108,8 +109,13 @@ export function Chat({ id: initialId }: { id?: string }) {
       router.push(`/chat/${newId}`, { scroll: false });
     }
 
-    // Build files array from images
-    const files = images.map((dataUrl) => ({
+    let effectiveImages = images;
+    if (images.length > 0 && !currentModelSupportsImages) {
+      toast.warning(`${models[selectedModelId]} is text-only. Images were removed from this message.`);
+      effectiveImages = [];
+    }
+
+    const files = effectiveImages.map((dataUrl) => ({
       type: "file" as const,
       url: dataUrl,
       mediaType: "image/png" as const,
@@ -122,7 +128,7 @@ export function Chat({ id: initialId }: { id?: string }) {
 
     setInput("");
     setImages([]);
-  }, [input, images, id, isGeneratingResponse, sendMessage, router]);
+  }, [input, images, id, isGeneratingResponse, sendMessage, router, selectedModelId, currentModelSupportsImages]);
 
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
     const items = e.clipboardData?.items;
@@ -268,9 +274,14 @@ export function Chat({ id: initialId }: { id?: string }) {
 
             {/* Image upload button */}
             <button
-              className="text-sm p-1.5 rounded-lg flex flex-row items-center gap-1 dark:hover:bg-zinc-600 hover:bg-zinc-200 cursor-pointer text-zinc-500"
-              onClick={() => fileInputRef.current?.click()}
-              title="Attach image"
+              className={cn(
+                "text-sm p-1.5 rounded-lg flex flex-row items-center gap-1 cursor-pointer text-zinc-500",
+                currentModelSupportsImages
+                  ? "dark:hover:bg-zinc-600 hover:bg-zinc-200"
+                  : "opacity-30 cursor-not-allowed"
+              )}
+              onClick={() => currentModelSupportsImages && fileInputRef.current?.click()}
+              title={currentModelSupportsImages ? "Attach image" : "This model doesn't support images"}
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -335,6 +346,16 @@ export function Chat({ id: initialId }: { id?: string }) {
           </div>
         </div>
 
+        {!currentModelSupportsImages && (
+          <div className="flex items-center gap-1.5 text-xs text-amber-500 dark:text-amber-400 px-1">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
+              <path d="M12 9v4"/>
+              <path d="M12 17h.01"/>
+            </svg>
+            <span>{models[selectedModelId]} is text-only — image prompts are not supported for this model</span>
+          </div>
+        )}
         <Footnote />
       </div>
     </div>

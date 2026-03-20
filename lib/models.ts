@@ -50,3 +50,10 @@ export const models: Record<modelID, string> = {
   "glm-5": "GLM-5",
   "gpt-oss-120b": "GPT-OSS 120B",
 };
+
+export const modelCapabilities: Record<modelID, { supportsImages: boolean }> = {
+  "kimi-k2.5": { supportsImages: true },
+  "nvidia-nemotron": { supportsImages: false },
+  "glm-5": { supportsImages: true },
+  "gpt-oss-120b": { supportsImages: false },
+};

@@ -1,16 +1,27 @@
 import { Toaster } from 'sonner';
-import { GeistSans } from 'geist/font/sans';
-import { GeistMono } from 'geist/font/mono';
-import Link from 'next/link';
+import { Chakra_Petch, Lora } from 'next/font/google';
 import type { Metadata } from 'next';
 
 import { Sidebar } from '@/components/sidebar';
 import './globals.css';
 
+const chakraPetch = Chakra_Petch({
+  subsets: ['latin'],
+  weight: ['300', '400', '600', '700'],
+  variable: '--font-heading',
+});
+
+const lora = Lora({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  style: ['normal', 'italic'],
+  variable: '--font-body',
+});
+
 export const metadata: Metadata = {
-  title: 'Reasoning Preview',
+  title: "Richa's Personal Intelligence",
   description:
-    'This is a preview of using reasoning models with Next.js and the AI SDK.',
+    'A personal AI reasoning engine for deep thinking, research, and multimodal understanding.',
 };
 
 export default function RootLayout({
@@ -19,7 +30,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
+    <html lang="en" className={`${chakraPetch.variable} ${lora.variable}`}>
       <body>
         <div className="flex flex-row h-dvh w-full overflow-hidden dark:bg-zinc-950 bg-white">
           <Sidebar />

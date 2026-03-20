@@ -1,6 +1,5 @@
 import {
   S3Client,
-  PutObjectCommand,
   GetObjectCommand,
   ListObjectsV2Command,
   HeadObjectCommand,
@@ -58,8 +57,11 @@ export async function getFile(key: string): Promise<string | null> {
     const command = new GetObjectCommand({ Bucket: bucket, Key: key });
     const response = await s3Client.send(command);
     return (await response.Body?.transformToString()) ?? null;
-  } catch (error: any) {
-    if (error.name === "NoSuchKey" || error.$metadata?.httpStatusCode === 404) {
+  } catch (error: unknown) {
+    if (
+      error instanceof Error &&
+      (error.name === "NoSuchKey" || (error as any).$metadata?.httpStatusCode === 404)
+    ) {
       return null;
     }
     throw error;
@@ -145,7 +147,7 @@ export async function processAndUploadImages(
   const imageRefs: ChatImageRef[] = [];
   const processedParts: ChatMessagePart[] = [];
 
-  for (const part of processedParts) {
+  for (const part of parts) {
     if (part.type === "file" && part.url?.startsWith("data:")) {
       const match = part.url.match(/^data:([^;]+);base64,(.+)$/);
       if (match) {
@@ -153,16 +155,12 @@ export async function processAndUploadImages(
         const base64Data = match[2];
         const buffer = Buffer.from(base64Data, "base64");
 
-        // Hash for deduplication (Pure content hash)
         const hash = crypto
           .createHash("sha256")
           .update(buffer)
           .digest("hex")
           .slice(0, 16);
         const ext = mediaType.split("/")[1] || "png";
-        
-        // Use a global images folder if you want cross-chat deduplication,
-        // or per-chat for isolation. Sticking to per-chat for now as requested.
         const imageKey = `chats/${chatId}/images/${hash}.${ext}`;
 
         let url: string;
@@ -184,36 +182,6 @@ export async function processAndUploadImages(
     processedParts.push(part);
   }
 
-  // Handle messages that don't have parts yet but have images in AI SDK format
-  // (Legacy or alternate format check)
-  for (const part of parts) {
-    if (part.type === "file" && part.url?.startsWith("data:")) {
-      const match = part.url.match(/^data:([^;]+);base64,(.+)$/);
-      if (match) {
-        const mediaType = match[1];
-        const base64Data = match[2];
-        const buffer = Buffer.from(base64Data, "base64");
-        const hash = crypto.createHash("sha256").update(buffer).digest("hex").slice(0, 16);
-        const ext = mediaType.split("/")[1] || "png";
-        const imageKey = `chats/${chatId}/images/${hash}.${ext}`;
-
-        let url: string;
-        if (await fileExists(imageKey)) {
-          url = getPublicUrl(imageKey);
-        } else {
-          url = await saveFile(imageKey, buffer, mediaType);
-        }
-        
-        imageRefs.push({ key: imageKey, url, mediaType, hash });
-        processedParts.push({ type: "file", url, mediaType });
-      } else {
-        processedParts.push(part);
-      }
-    } else {
-      processedParts.push(part);
-    }
-  }
-
   return { parts: processedParts, imageRefs };
 }
 
@@ -227,13 +195,12 @@ export async function processAndUploadImages(
  */
 export async function saveChat(
   chatId: string,
-  rawMessages: any[],
+  rawMessages: Array<{ id?: string; parts?: any[]; content?: string; role: any; createdAt?: string }>,
   currentModel: string = "kimi-k2.5"
 ): Promise<ChatDocument> {
   let hasImages = false;
   const now = new Date().toISOString();
 
-  // 1. Process and save each incoming message as an individual file
   const storedMessages: StoredMessage[] = [];
 
   for (const [index, msg] of rawMessages.entries()) {
@@ -249,7 +216,6 @@ export async function saveChat(
       parts.push({ type: "text", text: msg.content });
     }
 
-    // Process and upload images
     const { parts: processedParts, imageRefs } =
       await processAndUploadImages(chatId, parts);
 
@@ -265,17 +231,13 @@ export async function saveChat(
 
     storedMessages.push(storedMsg);
 
-    // Save individual message file (Atomic)
-    // Using a padded index prefix for easier sorting if listing manually
     const paddedIndex = String(index).padStart(4, '0');
-    // Important: We save with both index (for order) and ID (for uniqueness)
     await saveFile(
       `chats/${chatId}/messages/${paddedIndex}-${messageId}.json`,
       JSON.stringify(storedMsg, null, 2)
     );
   }
 
-  // 2. Derive metadata
   const firstUserMsg = storedMessages.find((m) => m.role === "user");
   const titleText =
     firstUserMsg?.parts.find((p) => p.type === "text")?.text || "New Chat";
@@ -299,7 +261,6 @@ export async function saveChat(
     } catch {}
   }
 
-  // 3. Save metadata (Source of truth for history list)
   await saveFile(
     `chats/${chatId}/metadata.json`,
     JSON.stringify(metadata, null, 2)
@@ -317,7 +278,6 @@ export async function loadChat(
 ): Promise<ChatDocument | null> {
   const metaRaw = await getFile(`chats/${chatId}/metadata.json`);
   if (!metaRaw) {
-    // Check for legacy single-file format
     const legacyRaw = await getFile(`chats/${chatId}/messages.json`) || await getFile(`chats/${chatId}.json`);
     if (legacyRaw) {
       const legacyMsgs = JSON.parse(legacyRaw);
@@ -340,12 +300,9 @@ export async function loadChat(
   }
 
   const metadata: ChatMetadata = JSON.parse(metaRaw);
-
-  // Use ListObjects to find all individual message files
   const messageFiles = await listFiles(`chats/${chatId}/messages/`);
   
   if (messageFiles.length === 0) {
-    // Fallback to old format messages.json inside the folder
     const fallbackMsgs = await getFile(`chats/${chatId}/messages.json`);
     return {
       id: chatId,
@@ -354,14 +311,13 @@ export async function loadChat(
     };
   }
 
-  // Fetch all message parts and sort them by the padded index in their Key
   const messageObjects = await Promise.all(
     messageFiles
-      .filter(f => f.Key?.endsWith('.json'))
+      .filter((f) => f.Key?.endsWith('.json'))
       .sort((a, b) => (a.Key! > b.Key! ? 1 : -1))
       .map(async (f) => {
         const raw = await getFile(f.Key!);
-        return raw ? JSON.parse(raw) as StoredMessage : null;
+        return raw ? (JSON.parse(raw) as StoredMessage) : null;
       })
   );
 
@@ -374,22 +330,15 @@ export async function loadChat(
   };
 }
 
-
 /**
  * List all chats by dynamically scanning the Space.
- * This ensures no indexing race conditions exist.
  */
 export async function listChats(): Promise<ChatMetadata[]> {
   const files = await listFiles("chats/");
-  
-  // Find all metadata.json files
   const metaKeys = files
     .filter((f) => f.Key?.endsWith("/metadata.json"))
     .map((f) => f.Key!);
 
-  // Fetch all metadata files in parallel
-  // Note: For huge volumes, this could be throttled or use a secondary index.
-  // For individual personal intelligence, this is the most reliable "Source of Truth".
   const metadataObjects = await Promise.all(
     metaKeys.map(async (key) => {
       const raw = await getFile(key);
@@ -403,8 +352,6 @@ export async function listChats(): Promise<ChatMetadata[]> {
   );
 
   const chats = metadataObjects.filter((m): m is ChatMetadata => m !== null);
-
-  // Sort newest first
   chats.sort(
     (a, b) =>
       new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
@@ -422,12 +369,9 @@ export async function deleteChat(chatId: string): Promise<void> {
   
   if (files.length === 0) return;
 
-  // Delete all objects under the chat prefix
-  // Using Promise.all for parallel deletion of individual message and metadata files
   await Promise.all(
     files.map((file) => 
       s3Client.send(new DeleteObjectCommand({ Bucket: bucket, Key: file.Key! }))
     )
   );
 }
-
