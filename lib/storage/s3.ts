@@ -38,6 +38,7 @@ export async function saveFile(
   content: string | Buffer,
   contentType: string = "application/json"
 ): Promise<string> {
+  const acl = process.env.SPACES_OBJECT_ACL;
   const upload = new Upload({
     client: s3Client,
     params: {
@@ -45,7 +46,7 @@ export async function saveFile(
       Key: key,
       Body: content,
       ContentType: contentType,
-      ACL: "public-read",
+      ...(acl ? { ACL: acl } : {}),
     },
   });
   await upload.done();
@@ -142,7 +143,8 @@ export interface ChatDocument {
  */
 export async function processAndUploadImages(
   chatId: string,
-  parts: ChatMessagePart[]
+  parts: ChatMessagePart[],
+  uploadedImageKeys?: Set<string>
 ): Promise<{ parts: ChatMessagePart[]; imageRefs: ChatImageRef[] }> {
   const imageRefs: ChatImageRef[] = [];
   const processedParts: ChatMessagePart[] = [];
@@ -162,13 +164,12 @@ export async function processAndUploadImages(
           .slice(0, 16);
         const ext = mediaType.split("/")[1] || "png";
         const imageKey = `chats/${chatId}/images/${hash}.${ext}`;
-
-        let url: string;
-        if (await fileExists(imageKey)) {
-          url = getPublicUrl(imageKey);
-        } else {
-          url = await saveFile(imageKey, buffer, mediaType);
+        const alreadyUploaded = uploadedImageKeys?.has(imageKey);
+        if (!alreadyUploaded) {
+          await saveFile(imageKey, buffer, mediaType);
+          uploadedImageKeys?.add(imageKey);
         }
+        const url = getPublicUrl(imageKey);
 
         imageRefs.push({ key: imageKey, url, mediaType, hash });
         processedParts.push({
@@ -191,7 +192,7 @@ export async function processAndUploadImages(
 
 /**
  * Save a complete chat (messages + metadata) to S3.
- * Uses atomic per-message files to prevent data loss.
+ * Writes compact chat snapshots to minimize serverless latency.
  */
 export async function saveChat(
   chatId: string,
@@ -200,8 +201,9 @@ export async function saveChat(
 ): Promise<ChatDocument> {
   let hasImages = false;
   const now = new Date().toISOString();
+  const uploadedImageKeys = new Set<string>();
 
-  // Process all messages in parallel (instead of sequentially)
+  // Process all messages in parallel.
   const storedMessages: StoredMessage[] = await Promise.all(
     rawMessages.map(async (msg, index) => {
       const messageId = msg.id || `msg-${Date.now()}-${index}`;
@@ -217,7 +219,7 @@ export async function saveChat(
       }
 
       const { parts: processedParts, imageRefs } =
-        await processAndUploadImages(chatId, parts);
+        await processAndUploadImages(chatId, parts, uploadedImageKeys);
 
       if (imageRefs.length > 0) hasImages = true;
 
@@ -228,13 +230,6 @@ export async function saveChat(
         model: msg.role === "assistant" ? currentModel : undefined,
         timestamp: msg.createdAt ? new Date(msg.createdAt).toISOString() : now,
       };
-
-      // Save individual message file atomically
-      const paddedIndex = String(index).padStart(4, '0');
-      await saveFile(
-        `chats/${chatId}/messages/${paddedIndex}-${messageId}.json`,
-        JSON.stringify(storedMsg, null, 2)
-      );
 
       return storedMsg;
     })
@@ -265,17 +260,17 @@ export async function saveChat(
     } catch {}
   }
 
-  await saveFile(
-    `chats/${chatId}/metadata.json`,
-    JSON.stringify(metadata, null, 2)
-  );
+  await Promise.all([
+    saveFile(`chats/${chatId}/messages.json`, JSON.stringify(storedMessages, null, 2)),
+    saveFile(`chats/${chatId}/metadata.json`, JSON.stringify(metadata, null, 2)),
+  ]);
 
   return { id: chatId, metadata, messages: storedMessages };
 }
 
 /**
  * Load a chat's messages from S3.
- * Assembles history from individual message files.
+ * Supports both compact snapshots and legacy per-message layouts.
  */
 export async function loadChat(
   chatId: string
