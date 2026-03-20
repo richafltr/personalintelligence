@@ -52,8 +52,10 @@ export const models: Record<modelID, string> = {
 };
 
 export const modelCapabilities: Record<modelID, { supportsImages: boolean }> = {
-  "kimi-k2.5": { supportsImages: true },
+  // DO Inference currently does not support image URLs or base64 in any request
+  // Images are saved to S3 for storage but cannot be passed to the model
+  "kimi-k2.5": { supportsImages: false },
   "nvidia-nemotron": { supportsImages: false },
-  "glm-5": { supportsImages: true },
+  "glm-5": { supportsImages: false },
   "gpt-oss-120b": { supportsImages: false },
 };

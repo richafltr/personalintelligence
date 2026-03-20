@@ -353,7 +353,7 @@ export function Chat({ id: initialId }: { id?: string }) {
               <path d="M12 9v4"/>
               <path d="M12 17h.01"/>
             </svg>
-            <span>{models[selectedModelId]} is text-only — image prompts are not supported for this model</span>
+            <span>Images are saved to your Space but DO Inference models are text-only — vision support coming soon</span>
           </div>
         )}
         <Footnote />
