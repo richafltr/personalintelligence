@@ -161,6 +161,21 @@ export function Messages({ messages, status }: MessagesProps) {
                   />
                 );
               }
+
+              if (part.type === "file") {
+                const p = part as unknown as { type: "file"; mediaType?: string; mimeType?: string; url: string };
+                const mime = p.mediaType || p.mimeType || "";
+                if (mime.startsWith("image/") || p.url?.match(/\.(png|jpg|jpeg|gif|webp)/i)) {
+                  return (
+                    <img
+                      key={`${message.id}-${partIndex}`}
+                      src={p.url}
+                      alt="Uploaded image"
+                      className="max-w-xs rounded-lg border dark:border-zinc-700 border-zinc-300"
+                    />
+                  );
+                }
+              }
             })}
           </div>
         </div>
