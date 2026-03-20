@@ -10,13 +10,15 @@ Richa's custom AI reasoning engine, powered by Next.js 15, Vercel AI SDK, and Di
 > **Data Integrity Warning**: The current storage architecture is at high risk of data loss due to race conditions in the JSON indexing system. Fixing this is Top Priority.
 
 ### 🔴 Immediate Actions (High Priority)
-- [ ] **Verify S3 Bucket**: Currently, `lib/storage/s3.ts` fails with `NoSuchBucket`. Confirm the Space `personal-intelligence` exists and is accessible in Digital Ocean `nyc3`.
-- [x] **Abolish `index.json`**: Removed the central `chats/index.json` file. Replaced with dynamic indexer using `ListObjectsV2Command` for 100% data safety.
-- [x] **Fix Image Deduplication**: Modified to use pure content hashes. Images are now deduplicated efficiently across saves.
-- [x] **Atomic Message Appends**: Moved to individual message files (`chats/{id}/messages/{paddedIndex}-{id}.json`). This prevents conversation truncation.
+- [x] **Verify S3 Bucket**: Successfully verified `personal-intelligence` bucket via DO PAT.
+- [x] **Abolish `index.json`**: Removed central index; implemented dynamic S3 listing.
+- [x] **Fix Image Deduplication**: Implemented pure content hashing.
+- [x] **Atomic Message Appends**: Implemented individual per-message JSON storage.
 
 ### 🟡 Enhancement To-Dos
-- [ ] **Database Migration Plan**: Evaluate transitioning the Chat Metadata and Content storage to a relational DB (Postgres) while keeping S3 only for heavy media (Images/Audio).
+- [x] **Delete Functionality**: Added sidebar delete button for chats.
+- [x] **Expanded Model Support**: Added GPT-OSS 120B Managed Inference.
+- [ ] **Database Migration Plan**: Evaluate transitioning the Chat Metadata to a relational DB (Postgres) if history grows beyond ~1000 chats.
 - [ ] **UI Polish**: Ensure chat history sidebar syncs accurately with the dynamic S3 state.
 - [ ] **Reasoning Visibility**: Refine how thinking/reasoning parts are displayed in history.
 
