@@ -201,47 +201,52 @@ export async function saveChat(
   let hasImages = false;
   const now = new Date().toISOString();
 
-  const storedMessages: StoredMessage[] = [];
+  // Process all messages in parallel (instead of sequentially)
+  const storedMessages: StoredMessage[] = await Promise.all(
+    rawMessages.map(async (msg, index) => {
+      const messageId = msg.id || `msg-${Date.now()}-${index}`;
+      const parts: ChatMessagePart[] = (msg.parts || []).map((p: any) => ({
+        type: p.type,
+        text: p.text,
+        url: p.url,
+        mediaType: p.mediaType || p.mimeType,
+      }));
 
-  for (const [index, msg] of rawMessages.entries()) {
-    const messageId = msg.id || `msg-${Date.now()}-${index}`;
-    const parts: ChatMessagePart[] = (msg.parts || []).map((p: any) => ({
-      type: p.type,
-      text: p.text,
-      url: p.url,
-      mediaType: p.mediaType || p.mimeType,
-    }));
+      if (parts.length === 0 && typeof msg.content === "string") {
+        parts.push({ type: "text", text: msg.content });
+      }
 
-    if (parts.length === 0 && typeof msg.content === "string") {
-      parts.push({ type: "text", text: msg.content });
-    }
+      const { parts: processedParts, imageRefs } =
+        await processAndUploadImages(chatId, parts);
 
-    const { parts: processedParts, imageRefs } =
-      await processAndUploadImages(chatId, parts);
+      if (imageRefs.length > 0) hasImages = true;
 
-    if (imageRefs.length > 0) hasImages = true;
+      const storedMsg: StoredMessage = {
+        id: messageId,
+        role: msg.role,
+        parts: processedParts,
+        model: msg.role === "assistant" ? currentModel : undefined,
+        timestamp: msg.createdAt ? new Date(msg.createdAt).toISOString() : now,
+      };
 
-    const storedMsg: StoredMessage = {
-      id: messageId,
-      role: msg.role,
-      parts: processedParts,
-      model: msg.role === "assistant" ? currentModel : undefined,
-      timestamp: msg.createdAt ? new Date(msg.createdAt).toISOString() : now,
-    };
+      // Save individual message file atomically
+      const paddedIndex = String(index).padStart(4, '0');
+      await saveFile(
+        `chats/${chatId}/messages/${paddedIndex}-${messageId}.json`,
+        JSON.stringify(storedMsg, null, 2)
+      );
 
-    storedMessages.push(storedMsg);
-
-    const paddedIndex = String(index).padStart(4, '0');
-    await saveFile(
-      `chats/${chatId}/messages/${paddedIndex}-${messageId}.json`,
-      JSON.stringify(storedMsg, null, 2)
-    );
-  }
+      return storedMsg;
+    })
+  );
 
   const firstUserMsg = storedMessages.find((m) => m.role === "user");
   const titleText =
     firstUserMsg?.parts.find((p) => p.type === "text")?.text || "New Chat";
   const title = titleText.length > 60 ? titleText.slice(0, 60) + "..." : titleText;
+
+  // Fetch existing metadata in parallel with building new metadata
+  const existingMetaRaw = await getFile(`chats/${chatId}/metadata.json`);
 
   const metadata: ChatMetadata = {
     id: chatId,
@@ -253,7 +258,6 @@ export async function saveChat(
     hasImages,
   };
 
-  const existingMetaRaw = await getFile(`chats/${chatId}/metadata.json`);
   if (existingMetaRaw) {
     try {
       const existingMeta = JSON.parse(existingMetaRaw);

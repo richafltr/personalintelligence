@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { saveChat } from "@/lib/storage/s3";
 
+// Extend Vercel function timeout to 60s for S3 operations
+export const maxDuration = 60;
+
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
