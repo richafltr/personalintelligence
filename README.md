@@ -1,35 +1,34 @@
 # Personal Intelligence Reasoning Starter
 
-Richa's custom AI reasoning engine, powered by Next.js 15, Vercel AI SDK, and Digital Ocean S3 storage. This project is built to handle deep chat reasoning and image-integrated multimodal conversations.
+Richa's custom AI reasoning engine, powered by Next.js 15, Vercel AI SDK, and Digital Ocean S3 storage. Built to handle deep chat reasoning and image-integrated multimodal conversations.
 
 ---
 
-## 🛠 Project Status & Critical To-Dos
+## 🛠 Project Status & Recent Progress
 
-> [!CAUTION]
-> **Data Integrity Warning**: The current storage architecture is at high risk of data loss due to race conditions in the JSON indexing system. Fixing this is Top Priority.
+> [!NOTE]
+> **Recent Updates**: We have successfully stabilized the foundational storage and React routing architectures. Chat persistence is now rock-solid in deployment.
 
-### 🔴 Immediate Actions (High Priority)
-- [x] **Verify S3 Bucket**: Successfully verified `personal-intelligence` bucket via DO PAT.
-- [x] **Abolish `index.json`**: Removed central index; implemented dynamic S3 listing.
-- [x] **Fix Image Deduplication**: Implemented pure content hashing.
-- [x] **Atomic Message Appends**: Implemented individual per-message JSON storage.
+### 🟢 Completed Integrations
+- [x] **Chat Persistence & Deployment**: Fixed S3 integration issues. Verified stable chat history loading and synchronization in Vercel preview environments ([PR #2](https://github.com/richafltr/personalintelligence/pull/2)).
+- [x] **First-Message Disappearance Fix**: Replaced `router.push` with `window.history.replaceState` inside the Next.js App Router tree to prevent component unmounting when a new session UUID is generated. Messages no longer abort midway ([PR #4](https://github.com/richafltr/personalintelligence/pull/4), [Issue #3](https://github.com/richafltr/personalintelligence/issues/3)).
+- [x] **Storage Refactoring (Data Integrity)**: Eliminated central `index.json` race conditions, utilizing per-message JSON saving and atomic image hashing.
+
+### 🔴 Immediate Action Items (High Priority)
+- [ ] **Dedicated Multimodal Inference Integration**: Digital Ocean's Serverless Inference API is currently restricted to text-only completions. Set up a dedicated Digital Ocean GPU Droplet (via 1-Click Hugging Face deployments) running **Llama 3.2 Vision** or **Qwen2-VL** to enable true multimodal image inputs and processing.
+- [ ] **Image Generation Support**: Evaluate connecting an open-source diffusion model (like Stable Diffusion 3 or FLUX.1) to allow the LLM to process conversational requests for image _output_.
 
 ### 🟡 Enhancement To-Dos
-- [x] **Delete Functionality**: Added sidebar delete button for chats.
-- [x] **Expanded Model Support**: Added GPT-OSS 120B Managed Inference.
-- [ ] **Database Migration Plan**: Evaluate transitioning the Chat Metadata to a relational DB (Postgres) if history grows beyond ~1000 chats.
-- [ ] **UI Polish**: Ensure chat history sidebar syncs accurately with the dynamic S3 state.
-- [ ] **Reasoning Visibility**: Refine how thinking/reasoning parts are displayed in history.
+- [ ] **Database Migration Plan**: Evaluate transitioning the Chat Metadata indexing to a relational DB (Postgres) if history grows beyond ~1000 active chats, leaving only payloads and binaries in S3.
+- [ ] **UI Polish**: Refine how `<think>` reasoning tags are displayed during active streaming versus historical viewing in the sidebar.
 
 ---
 
 ## Features
 
-- **Advanced Reasoning**: Deep integration with Vercel's AI SDK for complex reasoning models.
-- **Spaces-backed History**: Chat history and images stored in Digital Ocean Spaces.
-- **Multimodal Support**: Drag-and-drop/paste support for images integrated with the AI workflow.
-- **Next.js 15 Power**: Built on the latest React and server-side primitives.
+- **Advanced Reasoning**: Deep integration with Vercel's AI SDK for complex reasoning models (Nemotron, GLM, DeepSeek distillations).
+- **Spaces-backed History**: Chat history and images stored robustly in Digital Ocean Spaces.
+- **Next.js 15 Power**: Built on the latest React, server-side primitives, and optimized state updates.
 
 ---
 
@@ -38,16 +37,16 @@ Richa's custom AI reasoning engine, powered by Next.js 15, Vercel AI SDK, and Di
 1.  **Environment Setup**:
     *   Copy `.env.example` to `.env`.
     *   Fill in Digital Ocean credentials (`SPACES_ACCESS_KEY_ID`, `SPACES_SECRET_ACCESS_KEY`, etc.).
-    *   Add your `DO_PAT` if you plan on automating infrastructure checks.
+    *   Fill in Model Inference keys (`MODEL_ACCESS_KEY`).
 
 2.  **Install Dependencies**:
     ```bash
-    npm install
+    pnpm install
     ```
 
 3.  **Run Dev Server**:
     ```bash
-    npm run dev
+    pnpm dev
     ```
 
 ---
@@ -63,7 +62,7 @@ Deploy your own version of Richa's Personal Intelligence to Vercel with all envi
 ## Architecture Overview
 
 **Current flow (Reliable & Atomic):**
-`Client Request` → `API Trigger` → `Load Metadata` → `Save individual message JSON to S3` → `Process Image Hashes` → `Return Stream`.
+`Client Request` → `API Trigger` → `Load Metadata` → `Save individual message JSON to DO Space` → `Process Image Hashes` → `Return Stream`.
 
 **Storage Strategy:**
 *   `/chats/[chatId]/metadata.json`: Source of truth for history list.
