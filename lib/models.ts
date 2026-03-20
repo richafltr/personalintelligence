@@ -33,6 +33,12 @@ export const myProvider = customProvider({
       }),
       model: do_inference.chat("glm-5"),
     }),
+    "gpt-oss-120b": wrapLanguageModel({
+      middleware: extractReasoningMiddleware({
+        tagName: "think",
+      }),
+      model: do_inference.chat("openai-gpt-oss-120b"),
+    }),
   },
 });
 
@@ -42,4 +48,5 @@ export const models: Record<modelID, string> = {
   "kimi-k2.5": "Kimi-k2.5",
   "nvidia-nemotron": "Nvidia Nemotron",
   "glm-5": "GLM-5",
+  "gpt-oss-120b": "GPT-OSS 120B",
 };
