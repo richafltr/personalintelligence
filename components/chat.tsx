@@ -106,7 +106,7 @@ export function Chat({ id: initialId }: { id?: string }) {
     if (!id) {
       const newId = crypto.randomUUID();
       setId(newId);
-      router.push(`/chat/${newId}`, { scroll: false });
+      window.history.replaceState({}, "", `/chat/${newId}`);
     }
 
     let effectiveImages = images;
