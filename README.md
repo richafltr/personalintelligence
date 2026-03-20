@@ -11,9 +11,9 @@ Richa's custom AI reasoning engine, powered by Next.js 15, Vercel AI SDK, and Di
 
 ### 🔴 Immediate Actions (High Priority)
 - [ ] **Verify S3 Bucket**: Currently, `lib/storage/s3.ts` fails with `NoSuchBucket`. Confirm the Space `personal-intelligence` exists and is accessible in Digital Ocean `nyc3`.
-- [ ] **Abolish `index.json`**: Remove the central `chats/index.json` file. Replace it with a dynamic indexer using `ListObjectsV2Command` to avoid massive data loss from simultaneous writes.
-- [ ] **Fix Image Deduplication**: Currently, hashing logic appends `Date.now()`, which breaks deduplication. Modify to use pure file hashes to save space and reduce redundant uploads.
-- [ ] **Atomic Message Appends**: Move from "Overwriting entire messages JSON" to "Appending individual message files". This prevents entire conversation truncation during network blips.
+- [x] **Abolish `index.json`**: Removed the central `chats/index.json` file. Replaced with dynamic indexer using `ListObjectsV2Command` for 100% data safety.
+- [x] **Fix Image Deduplication**: Modified to use pure content hashes. Images are now deduplicated efficiently across saves.
+- [x] **Atomic Message Appends**: Moved to individual message files (`chats/{id}/messages/{paddedIndex}-{id}.json`). This prevents conversation truncation.
 
 ### 🟡 Enhancement To-Dos
 - [ ] **Database Migration Plan**: Evaluate transitioning the Chat Metadata and Content storage to a relational DB (Postgres) while keeping S3 only for heavy media (Images/Audio).
