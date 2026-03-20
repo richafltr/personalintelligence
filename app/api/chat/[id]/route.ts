@@ -22,3 +22,18 @@ export async function GET(
     return NextResponse.json({ messages: [] });
   }
 }
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const id = (await params).id;
+    const { deleteChat } = await import("@/lib/storage/s3");
+    await deleteChat(id);
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Failed to delete chat:", error);
+    return NextResponse.json({ error: "Failed to delete chat" }, { status: 500 });
+  }
+}

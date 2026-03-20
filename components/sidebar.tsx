@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import cn from "classnames";
-import { PlusIcon, MessageSquareIcon } from "lucide-react";
+import { PlusIcon, MessageSquareIcon, Trash2Icon } from "lucide-react";
 import { useEffect, useState } from "react";
 
 interface ChatMetadata {
@@ -18,25 +18,45 @@ interface ChatMetadata {
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [chats, setChats] = useState<ChatMetadata[]>([]);
 
-  useEffect(() => {
-    // We will fetch from S3 indirectly via an API route later
-    const fetchHistory = async () => {
-      try {
-        const response = await fetch("/api/history");
-        if (response.ok) {
-          const data = await response.json();
-          setChats(data.chats || []);
-        }
-      } catch (error) {
-        console.error("Failed to fetch history:", error);
+  const fetchHistory = async () => {
+    try {
+      const response = await fetch("/api/history");
+      if (response.ok) {
+        const data = await response.json();
+        setChats(data.chats || []);
       }
-    };
+    } catch (error) {
+      console.error("Failed to fetch history:", error);
+    }
+  };
+
+  useEffect(() => {
     fetchHistory();
     window.addEventListener("history-updated", fetchHistory);
     return () => window.removeEventListener("history-updated", fetchHistory);
   }, []);
+
+  const handleDelete = async (e: React.MouseEvent, id: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!confirm("Are you sure you want to delete this chat?")) return;
+
+    try {
+      const response = await fetch(`/api/chat/${id}`, { method: "DELETE" });
+      if (response.ok) {
+        setChats((prev) => prev.filter((c) => c.id !== id));
+        if (pathname === `/chat/${id}`) {
+          router.push("/");
+        }
+      }
+    } catch (error) {
+      console.error("Failed to delete chat:", error);
+    }
+  };
 
   return (
     <div className="w-64 h-full border-r dark:border-zinc-800 border-zinc-200 flex flex-col dark:bg-zinc-900 bg-zinc-50 overflow-hidden shrink-0">
@@ -59,23 +79,32 @@ export function Sidebar() {
               key={chat.id}
               href={`/chat/${chat.id}`}
               className={cn(
-                "flex items-center gap-2 p-2 rounded-lg text-sm transition-colors",
+                "group flex items-center gap-2 p-2 rounded-lg text-sm transition-colors",
                 {
                   "dark:bg-zinc-800 bg-zinc-200": pathname === `/chat/${chat.id}`,
                   "dark:hover:bg-zinc-800 hover:bg-zinc-200": pathname !== `/chat/${chat.id}`,
                 }
               )}
             >
-              {chat.hasImages ? (
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-500 shrink-0">
-                  <rect width="18" height="18" x="3" y="3" rx="2" ry="2"/>
-                  <circle cx="9" cy="9" r="2"/>
-                  <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>
-                </svg>
-              ) : (
-                <MessageSquareIcon size={14} className="text-zinc-500 shrink-0" />
-              )}
+              <div className="relative shrink-0 flex items-center justify-center w-4 h-4">
+                {chat.hasImages ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-500">
+                    <rect width="18" height="18" x="3" y="3" rx="2" ry="2"/>
+                    <circle cx="9" cy="9" r="2"/>
+                    <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>
+                  </svg>
+                ) : (
+                  <MessageSquareIcon size={14} className="text-zinc-500" />
+                )}
+              </div>
               <span className="truncate flex-1">{chat.title}</span>
+              <button
+                onClick={(e) => handleDelete(e, chat.id)}
+                className="opacity-0 group-hover:opacity-100 p-1 dark:hover:bg-zinc-700 hover:bg-zinc-300 rounded transition-all text-zinc-500 hover:text-red-500"
+                title="Delete Chat"
+              >
+                <Trash2Icon size={14} />
+              </button>
             </Link>
           ))}
           {chats.length === 0 && (

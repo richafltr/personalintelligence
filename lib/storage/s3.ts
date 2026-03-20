@@ -413,3 +413,21 @@ export async function listChats(): Promise<ChatMetadata[]> {
   return chats;
 }
 
+/**
+ * Delete a chat and all its associated files (messages and images)
+ */
+export async function deleteChat(chatId: string): Promise<void> {
+  const prefix = `chats/${chatId}/`;
+  const files = await listFiles(prefix);
+  
+  if (files.length === 0) return;
+
+  // Delete all objects under the chat prefix
+  // Using Promise.all for parallel deletion of individual message and metadata files
+  await Promise.all(
+    files.map((file) => 
+      s3Client.send(new DeleteObjectCommand({ Bucket: bucket, Key: file.Key! }))
+    )
+  );
+}
+
